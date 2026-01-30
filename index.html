@@ -154,15 +154,7 @@
         </div>
 
         <!-- Result Screen -->
-        <div id="result-screen" class="hidden text-center">
-            <h2 class="text-2xl font-bold mb-6">所有卡片已完成单体排序！</h2>
-            <p class="text-gray-600 mb-8">您可以继续查看或导出最终结果。</p>
-            <div class="flex gap-4 justify-center">
-                <button id="final-reset-btn" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-3 px-8 rounded-full transition duration-300">
-                    重新开始
-                </button>
-            </div>
-        </div>
+        <!-- <div id="result-screen" class="hidden text-center"> ... </div> (Removed) -->
     </div>
 
     <script>
@@ -570,9 +562,8 @@
 
         function checkFinished() {
             if (allDecks.every(deckObj => deckObj.items.length <= 1)) {
+                // Keep the user on the deck selector page even when finished
                 console.log('All cards sorted.');
-                sortingScreen.classList.add('hidden');
-                resultScreen.classList.remove('hidden');
             }
         }
 
@@ -592,8 +583,7 @@
         };
 
         function showResults(sortedItems) {
-            sortingScreen.classList.add('hidden');
-            resultScreen.classList.remove('hidden');
+            // Function no longer switches screens
         }
 
         window.onload = loadState;
