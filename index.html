@@ -47,6 +47,9 @@
                 <div class="flex justify-between items-center mb-4 w-full">
                     <h3 class="text-lg font-bold">选择一个分组进行细分</h3>
                     <div class="flex gap-4">
+                        <button id="undo-split-btn" class="text-xs bg-yellow-100 hover:bg-yellow-200 text-yellow-700 font-bold py-1 px-3 rounded transition hidden">
+                            撤销上次分组 (Undo Split)
+                        </button>
                         <button id="export-btn" class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-1 px-4 rounded transition flex items-center">
                             <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                             导出当前 CSV
@@ -103,9 +106,14 @@
 
             <div id="active-sorting" class="hidden flex flex-col items-center w-full">
                 <div class="w-full flex justify-between items-center mb-6">
-                    <button id="back-to-decks" class="text-sm text-blue-600 hover:underline flex items-center font-medium">
-                        ← 返回分组选择
-                    </button>
+                    <div class="flex gap-4 items-center">
+                        <button id="back-to-decks" class="text-sm text-blue-600 hover:underline flex items-center font-medium">
+                            ← 返回分组选择
+                        </button>
+                        <button id="undo-last-choice" class="text-xs bg-yellow-50 text-yellow-600 border border-yellow-200 px-3 py-1 rounded-lg font-bold hover:bg-yellow-100 transition hidden">
+                            撤销上一个选择 (Undo)
+                        </button>
+                    </div>
                     <div class="text-sm text-gray-500 font-bold" id="progress-text">
                         正在处理当前组 (0/0)
                     </div>
@@ -144,7 +152,7 @@
             </div>
         </div>
 
-        <!-- Result Screen (Now just a small completion notice or hidden) -->
+        <!-- Result Screen -->
         <div id="result-screen" class="hidden text-center">
             <h2 class="text-2xl font-bold mb-6">所有卡片已完成单体排序！</h2>
             <p class="text-gray-600 mb-8">您可以继续查看或导出最终结果。</p>
@@ -172,7 +180,6 @@
         const resultScreen = document.getElementById('result-screen');
         const currentImg = document.querySelector('#current-card img');
         const nextImg = document.querySelector('#next-card img');
-        const nextCardDiv = document.getElementById('next-card');
         const nextCardWrapper = document.getElementById('next-card-wrapper');
         const progressText = document.getElementById('progress-text');
         const deckList = document.getElementById('deck-list');
@@ -188,6 +195,8 @@
         const closeRankBtn = document.getElementById('close-rank-modal');
         const currentRankContent = document.getElementById('current-rank-content');
         const exportBtn = document.getElementById('export-btn');
+        const undoSplitBtn = document.getElementById('undo-split-btn');
+        const undoChoiceBtn = document.getElementById('undo-last-choice');
         
         const imageModal = document.getElementById('image-modal');
         const modalImg = document.getElementById('modal-img');
@@ -199,6 +208,7 @@
         let resolveInput = null;
         let rejectInput = null;
         let allDecks = [];
+        let allDecksHistory = [];
         let modalImageGroup = [];
         let modalImageIndex = 0;
 
@@ -241,12 +251,14 @@
             updateModalImage();
         };
 
-        // Handle keyboard for modal
         window.addEventListener('keydown', (e) => {
             if (!imageModal.classList.contains('hidden')) {
                 if (e.key === 'ArrowLeft') prevImageBtn.click();
                 if (e.key === 'ArrowRight') nextImageBtn.click();
                 if (e.key === 'Escape') closeImageModal.click();
+            } else if (resolveInput) {
+                if (e.key === 'ArrowRight') resolveDecision('like');
+                if (e.key === 'ArrowLeft') resolveDecision('dislike');
             }
         });
 
@@ -291,9 +303,7 @@
             currentRankContent.innerHTML = '';
             allDecks.forEach((deckObj, deckIdx) => {
                 const groupContainer = document.createElement('div');
-                const isFinished = deckObj.items.length <= 1;
                 const typeClass = deckObj.type === 'like' ? 'border-green-200 bg-green-50' : (deckObj.type === 'dislike' ? 'border-red-200 bg-red-50' : 'border-gray-200 bg-gray-50');
-                
                 groupContainer.className = `col-span-4 p-3 mb-3 rounded-lg border-2 ${typeClass} text-left`;
                 
                 const groupTitle = document.createElement('div');
@@ -327,13 +337,16 @@
 
         document.getElementById('like-btn').onclick = () => resolveDecision('like');
         document.getElementById('dislike-btn').onclick = () => resolveDecision('dislike');
+        undoChoiceBtn.onclick = () => resolveDecision('undo');
         
-        window.addEventListener('keydown', (e) => {
-            if (resolveInput) {
-                if (e.key === 'ArrowRight') resolveDecision('like');
-                if (e.key === 'ArrowLeft') resolveDecision('dislike');
+        undoSplitBtn.onclick = () => {
+            if (allDecksHistory.length > 0) {
+                allDecks = allDecksHistory.pop();
+                saveState();
+                updateDeckList();
+                checkUndoSplitButton();
             }
-        });
+        };
 
         function resolveDecision(choice) {
             if (resolveInput) {
@@ -358,6 +371,8 @@
         const performReset = () => {
             if (confirm('确定要重置所有进度并重新洗牌吗？')) {
                 localStorage.removeItem('profile_ranking_state');
+                localStorage.removeItem('profile_ranking_history');
+                allDecksHistory = [];
                 const shuffledDeck = shuffle([...imagePaths]);
                 allDecks = [{
                     items: shuffledDeck,
@@ -367,10 +382,12 @@
                 abortSorting();
                 updateDeckList();
                 saveState();
+                checkUndoSplitButton();
                 deckSelector.classList.remove('hidden');
                 activeSorting.classList.add('hidden');
                 resultScreen.classList.add('hidden');
                 sortingScreen.classList.remove('hidden');
+                startScreen.classList.add('hidden');
             }
         };
 
@@ -379,19 +396,31 @@
 
         function saveState() {
             localStorage.setItem('profile_ranking_state', JSON.stringify(allDecks));
+            localStorage.setItem('profile_ranking_history', JSON.stringify(allDecksHistory));
         }
 
         function loadState() {
             const saved = localStorage.getItem('profile_ranking_state');
+            const savedHistory = localStorage.getItem('profile_ranking_history');
             if (saved) {
                 allDecks = JSON.parse(saved);
+                allDecksHistory = savedHistory ? JSON.parse(savedHistory) : [];
                 startScreen.classList.add('hidden');
                 sortingScreen.classList.remove('hidden');
                 deckSelector.classList.remove('hidden');
                 updateDeckList();
+                checkUndoSplitButton();
                 return true;
             }
             return false;
+        }
+
+        function checkUndoSplitButton() {
+            if (allDecksHistory.length > 0) {
+                undoSplitBtn.classList.remove('hidden');
+            } else {
+                undoSplitBtn.classList.add('hidden');
+            }
         }
 
         async function splitDeck(deckIndex) {
@@ -404,22 +433,43 @@
 
             const likes = [];
             const dislikes = [];
+            const decisions = []; // Keep track of choices within this split session
 
             try {
-                for (let i = 0; i < deck.length; i++) {
+                let i = 0;
+                while (i < deck.length) {
+                    if (i > 0) undoChoiceBtn.classList.remove('hidden');
+                    else undoChoiceBtn.classList.add('hidden');
+
                     progressText.innerText = `正在处理当前组 (${i + 1}/${deck.length})`;
                     const decision = await getUserDecision(deck[i], deck[i + 1]);
+                    
+                    if (decision === 'undo') {
+                        if (i > 0) {
+                            i--;
+                            const lastChoice = decisions.pop();
+                            if (lastChoice === 'like') likes.pop();
+                            else dislikes.pop();
+                        }
+                        continue;
+                    }
+
+                    decisions.push(decision);
                     if (decision === 'like') {
                         likes.push(deck[i]);
                     } else {
                         dislikes.push(deck[i]);
                     }
+                    i++;
                 }
+
+                // Push current state to history before changing
+                allDecksHistory.push(JSON.parse(JSON.stringify(allDecks)));
+                if (allDecksHistory.length > 10) allDecksHistory.shift(); // Limit history
 
                 const newDecks = [];
                 const nextLevel = deckObj.level + 1;
                 
-                // Like group on the left as requested
                 if (likes.length > 0) {
                     newDecks.push({ items: likes, type: 'like', level: nextLevel });
                 }
@@ -437,6 +487,7 @@
             deckSelector.classList.remove('hidden');
             
             updateDeckList();
+            checkUndoSplitButton();
             checkFinished();
         }
 
@@ -492,7 +543,6 @@
                 
                 container.appendChild(btn);
 
-                // Add Profile ID text links instead of thumbnails
                 const profileContainer = document.createElement('div');
                 profileContainer.className = 'flex flex-wrap justify-center gap-x-2 gap-y-1 mt-2 max-w-[160px] text-[10px] font-bold text-gray-500';
                 deck.forEach(path => {
@@ -502,7 +552,7 @@
                     link.className = 'cursor-pointer hover:text-blue-600 hover:underline bg-gray-100 px-1 rounded';
                     link.innerText = `#${id}`;
                     link.onclick = (e) => {
-                        e.stopPropagation(); // Don't trigger the group split
+                        e.stopPropagation();
                         openImageViewer(path, deck);
                     };
                     profileContainer.appendChild(link);
@@ -519,8 +569,9 @@
 
         function checkFinished() {
             if (allDecks.every(deckObj => deckObj.items.length <= 1)) {
-                // Stay on deck list page, no popup
                 console.log('All cards sorted.');
+                sortingScreen.classList.add('hidden');
+                resultScreen.classList.remove('hidden');
             }
         }
 
@@ -544,7 +595,6 @@
             resultScreen.classList.remove('hidden');
         }
 
-        // Initialize from storage if exists
         window.onload = loadState;
     </script>
 </body>
