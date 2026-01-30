@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profile Ranking System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .card-wrapper {
+            transition: all 0.3s ease;
+        }
+        .current-card-container {
+            border: 4px solid #3b82f6;
+            box-shadow: 0 10px 25px -5px rgba(59, 130, 246, 0.4);
+        }
+        .next-card-container {
+            border: 2px solid #e5e7eb;
+            opacity: 0.8;
+            filter: grayscale(20%);
+        }
+        .deck-badge {
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            text-transform: uppercase;
+            font-weight: bold;
+        }
+        .deck-like { background-color: #d1fae5; color: #065f46; }
+        .deck-dislike { background-color: #fee2e2; color: #991b1b; }
+        .deck-initial { background-color: #e5e7eb; color: #374151; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col items-center justify-center p-4">
+    <div id="app" class="w-full max-w-7xl bg-white rounded-xl shadow-2xl p-8">
+        <!-- Start Screen -->
+        <div id="start-screen" class="text-center">
+            <h1 class="text-3xl font-bold mb-6">Profile 排序系统</h1>
+            <p class="text-gray-600 mb-8">您将对 24 个 Profile 进行排序。系统会通过 Like/Dislike 逐步细分。更高优先级的请选 Like。</p>
+            <button id="start-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-full transition duration-300 transform hover:scale-105">
+                开始排序
+            </button>
+        </div>
+
+        <!-- Sorting Screen -->
+        <div id="sorting-screen" class="hidden flex flex-col items-center">
+            <div id="deck-selector" class="flex flex-col items-center w-full">
+                <div class="flex justify-between items-center mb-4 w-full">
+                    <h3 class="text-lg font-bold">选择一个分组进行细分</h3>
+                    <div class="flex gap-4">
+                        <button id="export-btn" class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-1 px-4 rounded transition flex items-center">
+                            <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                            导出当前 CSV
+                        </button>
+                        <button id="view-current-rank" class="text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 font-bold py-1 px-3 rounded transition">
+                            查看当前预估排序
+                        </button>
+                        <button id="reset-btn" class="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-1 px-3 rounded transition">
+                            整体重置 (Reset All)
+                        </button>
+                    </div>
+                </div>
+                <div class="flex justify-between items-center mb-2 w-full">
+                    <div class="text-sm font-medium text-gray-500" id="overall-progress">
+                        进度: 0/24 已确定位置
+                    </div>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2 mb-8">
+                    <div id="progress-bar" class="bg-blue-600 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+                </div>
+                <div id="deck-list" class="flex flex-wrap gap-4 justify-center">
+                    <!-- Decks will be listed here -->
+                </div>
+
+                <!-- Image Viewer Modal -->
+                <div id="image-modal" class="hidden fixed inset-0 bg-black bg-opacity-80 z-[60] flex items-center justify-center p-4">
+                    <button id="close-image-modal" class="absolute top-4 right-4 text-white text-4xl">&times;</button>
+                    <button id="prev-image" class="absolute left-4 text-white text-6xl hover:text-blue-400 transition">&lsaquo;</button>
+                    <div class="max-w-4xl max-h-[90vh] flex flex-col items-center">
+                        <img id="modal-img" src="" class="max-w-full max-h-[80vh] object-contain shadow-2xl rounded-lg">
+                        <div id="modal-caption" class="mt-4 text-white font-bold text-xl tracking-widest"></div>
+                    </div>
+                    <button id="next-image" class="absolute right-4 text-white text-6xl hover:text-blue-400 transition">&rsaquo;</button>
+                </div>
+
+                <!-- Current Rank Overlay (Hidden by default) -->
+                <div id="rank-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+                    <div class="bg-white rounded-xl max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col">
+                        <div class="p-4 border-b flex justify-between items-center">
+                            <h4 class="font-bold">当前预估排序 (从高分到低分)</h4>
+                            <button id="close-rank-modal" class="text-gray-500 hover:text-black text-2xl">&times;</button>
+                        </div>
+                        <div class="overflow-y-auto p-4 flex-1">
+                            <div id="current-rank-content" class="grid grid-cols-4 gap-2 text-center text-xs">
+                                <!-- Rank content here -->
+                            </div>
+                        </div>
+                        <div class="p-4 bg-gray-50 text-[10px] text-gray-400">
+                            注：处于同一 Group 内的卡片目前相对顺序未定。
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="active-sorting" class="hidden flex flex-col items-center w-full">
+                <div class="w-full flex justify-between items-center mb-6">
+                    <button id="back-to-decks" class="text-sm text-blue-600 hover:underline flex items-center font-medium">
+                        ← 返回分组选择
+                    </button>
+                    <div class="text-sm text-gray-500 font-bold" id="progress-text">
+                        正在处理当前组 (0/0)
+                    </div>
+                </div>
+                
+                <div class="flex flex-col md:flex-row gap-8 w-full justify-center items-start">
+                    <!-- Current Card -->
+                    <div class="flex-1 flex flex-col items-center">
+                        <div class="mb-3 text-blue-600 font-black text-2xl tracking-widest uppercase">第一张 (当前)</div>
+                        <div id="current-card" class="current-card-container w-full rounded-2xl overflow-hidden bg-white flex items-center justify-center shadow-2xl" style="min-height: 500px;">
+                            <img src="" alt="Current Card" class="w-full h-auto object-contain">
+                        </div>
+                    </div>
+
+                    <!-- Next Card -->
+                    <div id="next-card-wrapper" class="flex-1 flex flex-col items-center">
+                        <div class="mb-3 text-gray-400 font-bold text-2xl tracking-widest uppercase">下一张 (预览)</div>
+                        <div id="next-card" class="next-card-container w-full rounded-2xl overflow-hidden bg-white flex items-center justify-center shadow-lg" style="min-height: 500px;">
+                            <img src="" alt="Next Card" class="w-full h-auto object-contain">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex gap-10 mt-12">
+                    <button id="dislike-btn" class="bg-red-50 hover:bg-red-100 text-red-600 font-black py-5 px-16 rounded-2xl border-2 border-red-200 shadow-sm transition-all duration-200 flex flex-col items-center group">
+                        <span class="tracking-widest text-xl">DISLIKE (←)</span>
+                    </button>
+                    <button id="like-btn" class="bg-green-50 hover:bg-green-100 text-green-600 font-black py-5 px-16 rounded-2xl border-2 border-green-200 shadow-sm transition-all duration-200 flex flex-col items-center group">
+                        <span class="tracking-widest text-xl">LIKE (→)</span>
+                    </button>
+                </div>
+                
+                <div class="mt-10 text-gray-400 text-sm font-medium">
+                    提示：可以使用键盘左右方向键 `←` 或 `→` 进行快速选择
+                </div>
+            </div>
+        </div>
+
+        <!-- Result Screen (Now just a small completion notice or hidden) -->
+        <div id="result-screen" class="hidden text-center">
+            <h2 class="text-2xl font-bold mb-6">所有卡片已完成单体排序！</h2>
+            <p class="text-gray-600 mb-8">您可以继续查看或导出最终结果。</p>
+            <div class="flex gap-4 justify-center">
+                <button id="final-reset-btn" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-3 px-8 rounded-full transition duration-300">
+                    重新开始
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const imagePaths = Array.from({length: 24}, (_, i) => `cards_all/幻灯片${i+1}.png`);
+        
+        function shuffle(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        const startScreen = document.getElementById('start-screen');
+        const sortingScreen = document.getElementById('sorting-screen');
+        const resultScreen = document.getElementById('result-screen');
+        const currentImg = document.querySelector('#current-card img');
+        const nextImg = document.querySelector('#next-card img');
+        const nextCardDiv = document.getElementById('next-card');
+        const nextCardWrapper = document.getElementById('next-card-wrapper');
+        const progressText = document.getElementById('progress-text');
+        const deckList = document.getElementById('deck-list');
+        const deckSelector = document.getElementById('deck-selector');
+        const activeSorting = document.getElementById('active-sorting');
+        const progressBar = document.getElementById('progress-bar');
+        const overallProgress = document.getElementById('overall-progress');
+        const backToDecksBtn = document.getElementById('back-to-decks');
+        const resetBtn = document.getElementById('reset-btn');
+        const finalResetBtn = document.getElementById('final-reset-btn');
+        const rankModal = document.getElementById('rank-modal');
+        const viewRankBtn = document.getElementById('view-current-rank');
+        const closeRankBtn = document.getElementById('close-rank-modal');
+        const currentRankContent = document.getElementById('current-rank-content');
+        const exportBtn = document.getElementById('export-btn');
+        
+        const imageModal = document.getElementById('image-modal');
+        const modalImg = document.getElementById('modal-img');
+        const modalCaption = document.getElementById('modal-caption');
+        const closeImageModal = document.getElementById('close-image-modal');
+        const prevImageBtn = document.getElementById('prev-image');
+        const nextImageBtn = document.getElementById('next-image');
+        
+        let resolveInput = null;
+        let rejectInput = null;
+        let allDecks = [];
+        let modalImageGroup = [];
+        let modalImageIndex = 0;
+
+        async function getUserDecision(item, nextItem) {
+            currentImg.src = item;
+            if (nextItem) {
+                nextImg.src = nextItem;
+                nextCardWrapper.classList.remove('invisible');
+            } else {
+                nextCardWrapper.classList.add('invisible');
+            }
+
+            return new Promise((resolve, reject) => {
+                resolveInput = resolve;
+                rejectInput = reject;
+            });
+        }
+
+        function openImageViewer(imagePath, group) {
+            modalImageGroup = group;
+            modalImageIndex = group.indexOf(imagePath);
+            updateModalImage();
+            imageModal.classList.remove('hidden');
+        }
+
+        function updateModalImage() {
+            const path = modalImageGroup[modalImageIndex];
+            modalImg.src = path;
+            const idMatch = path.match(/幻灯片(\d+)\.png/);
+            modalCaption.innerText = `Profile #${idMatch ? idMatch[1] : '?'}`;
+        }
+
+        closeImageModal.onclick = () => imageModal.classList.add('hidden');
+        prevImageBtn.onclick = () => {
+            modalImageIndex = (modalImageIndex - 1 + modalImageGroup.length) % modalImageGroup.length;
+            updateModalImage();
+        };
+        nextImageBtn.onclick = () => {
+            modalImageIndex = (modalImageIndex + 1) % modalImageGroup.length;
+            updateModalImage();
+        };
+
+        // Handle keyboard for modal
+        window.addEventListener('keydown', (e) => {
+            if (!imageModal.classList.contains('hidden')) {
+                if (e.key === 'ArrowLeft') prevImageBtn.click();
+                if (e.key === 'ArrowRight') nextImageBtn.click();
+                if (e.key === 'Escape') closeImageModal.click();
+            }
+        });
+
+        const getExportData = () => {
+            const flattened = allDecks.flatMap(d => d.items);
+            const resultsMap = {};
+            
+            flattened.forEach((path, index) => {
+                const rank = index + 1;
+                const score = 24 - index;
+                const idMatch = path.match(/幻灯片(\d+)\.png/);
+                const id = idMatch ? parseInt(idMatch[1]) : path;
+                resultsMap[id] = { rank, score };
+            });
+
+            const finalResults = [];
+            for (let i = 1; i <= 24; i++) {
+                const res = resultsMap[i] || { rank: 'N/A', score: 'N/A' };
+                finalResults.push({ id: i, rank: res.rank, score: res.score });
+            }
+            return finalResults;
+        };
+
+        exportBtn.onclick = () => {
+            const results = getExportData();
+            const csvRows = [
+                ['Profile ID', 'Rank', 'Preference Score'],
+                ...results.map(r => [r.id, r.rank, r.score])
+            ];
+            const csvContent = "\uFEFF" + csvRows.map(e => e.join(",")).join("\n");
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.setAttribute("href", url);
+            link.setAttribute("download", `ranking_results_by_profile_${new Date().getTime()}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        };
+
+        viewRankBtn.onclick = () => {
+            currentRankContent.innerHTML = '';
+            allDecks.forEach((deckObj, deckIdx) => {
+                const groupContainer = document.createElement('div');
+                const isFinished = deckObj.items.length <= 1;
+                const typeClass = deckObj.type === 'like' ? 'border-green-200 bg-green-50' : (deckObj.type === 'dislike' ? 'border-red-200 bg-red-50' : 'border-gray-200 bg-gray-50');
+                
+                groupContainer.className = `col-span-4 p-3 mb-3 rounded-lg border-2 ${typeClass} text-left`;
+                
+                const groupTitle = document.createElement('div');
+                groupTitle.className = 'text-[10px] font-bold mb-2 uppercase flex justify-between items-center';
+                const badgeText = deckObj.type === 'initial' ? 'INITIAL' : `${deckObj.type.toUpperCase()} (L${deckObj.level})`;
+                groupTitle.innerHTML = `
+                    <span>GROUP ${deckIdx + 1} <span class="ml-2 px-2 py-0.5 rounded bg-white border text-gray-500">${badgeText}</span></span>
+                    <span class="text-gray-400">${deckObj.items.length} CARDS</span>
+                `;
+                groupContainer.appendChild(groupTitle);
+
+                const itemsGrid = document.createElement('div');
+                itemsGrid.className = 'grid grid-cols-6 gap-2';
+                
+                deckObj.items.forEach(path => {
+                    const idMatch = path.match(/幻灯片(\d+)\.png/);
+                    const id = idMatch ? idMatch[1] : '?';
+                    const item = document.createElement('div');
+                    item.className = 'p-2 bg-white rounded shadow-sm border text-center font-bold text-xs';
+                    item.innerText = `#${id}`;
+                    itemsGrid.appendChild(item);
+                });
+                
+                groupContainer.appendChild(itemsGrid);
+                currentRankContent.appendChild(groupContainer);
+            });
+            rankModal.classList.remove('hidden');
+        };
+
+        closeRankBtn.onclick = () => rankModal.classList.add('hidden');
+
+        document.getElementById('like-btn').onclick = () => resolveDecision('like');
+        document.getElementById('dislike-btn').onclick = () => resolveDecision('dislike');
+        
+        window.addEventListener('keydown', (e) => {
+            if (resolveInput) {
+                if (e.key === 'ArrowRight') resolveDecision('like');
+                if (e.key === 'ArrowLeft') resolveDecision('dislike');
+            }
+        });
+
+        function resolveDecision(choice) {
+            if (resolveInput) {
+                const res = resolveInput;
+                resolveInput = null;
+                rejectInput = null;
+                res(choice);
+            }
+        }
+
+        function abortSorting() {
+            if (rejectInput) {
+                const rej = rejectInput;
+                resolveInput = null;
+                rejectInput = null;
+                rej('aborted');
+            }
+        }
+
+        backToDecksBtn.onclick = abortSorting;
+        
+        const performReset = () => {
+            if (confirm('确定要重置所有进度并重新洗牌吗？')) {
+                localStorage.removeItem('profile_ranking_state');
+                const shuffledDeck = shuffle([...imagePaths]);
+                allDecks = [{
+                    items: shuffledDeck,
+                    type: 'initial',
+                    level: 0
+                }];
+                abortSorting();
+                updateDeckList();
+                saveState();
+                deckSelector.classList.remove('hidden');
+                activeSorting.classList.add('hidden');
+                resultScreen.classList.add('hidden');
+                sortingScreen.classList.remove('hidden');
+            }
+        };
+
+        resetBtn.onclick = performReset;
+        finalResetBtn.onclick = performReset;
+
+        function saveState() {
+            localStorage.setItem('profile_ranking_state', JSON.stringify(allDecks));
+        }
+
+        function loadState() {
+            const saved = localStorage.getItem('profile_ranking_state');
+            if (saved) {
+                allDecks = JSON.parse(saved);
+                startScreen.classList.add('hidden');
+                sortingScreen.classList.remove('hidden');
+                deckSelector.classList.remove('hidden');
+                updateDeckList();
+                return true;
+            }
+            return false;
+        }
+
+        async function splitDeck(deckIndex) {
+            const deckObj = allDecks[deckIndex];
+            const deck = deckObj.items;
+            if (deck.length <= 1) return;
+
+            deckSelector.classList.add('hidden');
+            activeSorting.classList.remove('hidden');
+
+            const likes = [];
+            const dislikes = [];
+
+            try {
+                for (let i = 0; i < deck.length; i++) {
+                    progressText.innerText = `正在处理当前组 (${i + 1}/${deck.length})`;
+                    const decision = await getUserDecision(deck[i], deck[i + 1]);
+                    if (decision === 'like') {
+                        likes.push(deck[i]);
+                    } else {
+                        dislikes.push(deck[i]);
+                    }
+                }
+
+                const newDecks = [];
+                const nextLevel = deckObj.level + 1;
+                
+                // Like group on the left as requested
+                if (likes.length > 0) {
+                    newDecks.push({ items: likes, type: 'like', level: nextLevel });
+                }
+                if (dislikes.length > 0) {
+                    newDecks.push({ items: dislikes, type: 'dislike', level: nextLevel });
+                }
+                
+                allDecks.splice(deckIndex, 1, ...newDecks);
+                saveState();
+            } catch (err) {
+                if (err !== 'aborted') throw err;
+            }
+
+            activeSorting.classList.add('hidden');
+            deckSelector.classList.remove('hidden');
+            
+            updateDeckList();
+            checkFinished();
+        }
+
+        function updateDeckList() {
+            deckList.innerHTML = '';
+            let sortedCount = 0;
+            let currentRankPointer = 1;
+            
+            allDecks.forEach((deckObj, index) => {
+                const deck = deckObj.items;
+                const container = document.createElement('div');
+                container.className = 'flex flex-col items-center';
+                
+                const btn = document.createElement('button');
+                const isFinished = deck.length <= 1;
+                if (isFinished) sortedCount++;
+                
+                btn.className = `p-4 rounded-xl border-2 transition duration-200 flex flex-col items-center justify-center min-w-[140px] shadow-sm relative ${
+                    isFinished 
+                    ? 'bg-gray-50 border-gray-100 text-gray-400 cursor-default opacity-60' 
+                    : 'bg-white border-blue-200 text-blue-600 hover:border-blue-400 hover:shadow-md'
+                }`;
+                
+                const badgeClass = deckObj.type === 'like' ? 'deck-like' : (deckObj.type === 'dislike' ? 'deck-dislike' : 'deck-initial');
+                const badgeText = deckObj.type === 'initial' ? 'Initial' : `${deckObj.type.toUpperCase()} (L${deckObj.level})`;
+
+                let mainContent = '';
+                if (deck.length === 1) {
+                    const idMatch = deck[0].match(/幻灯片(\d+)\.png/);
+                    const id = idMatch ? idMatch[1] : '?';
+                    mainContent = `
+                        <span class="text-[10px] font-bold text-blue-500 mb-1">Rank #${currentRankPointer}</span>
+                        <span class="text-xs font-bold text-gray-400 mb-1">Profile ID</span>
+                        <span class="text-4xl font-black mb-1 text-gray-800">#${id}</span>
+                    `;
+                } else {
+                    mainContent = `
+                        <span class="text-[10px] uppercase font-bold tracking-wider mb-1 ${isFinished ? 'text-gray-300' : 'text-blue-400'}">Group ${index + 1}</span>
+                        <span class="text-3xl font-black mb-1">${deck.length}</span>
+                    `;
+                }
+                
+                currentRankPointer += deck.length;
+
+                btn.innerHTML = `
+                    <span class="deck-badge ${badgeClass} mb-2">${badgeText}</span>
+                    ${mainContent}
+                `;
+                
+                if (!isFinished) {
+                    btn.onclick = () => splitDeck(index);
+                }
+                
+                container.appendChild(btn);
+
+                // Add Profile ID text links instead of thumbnails
+                const profileContainer = document.createElement('div');
+                profileContainer.className = 'flex flex-wrap justify-center gap-x-2 gap-y-1 mt-2 max-w-[160px] text-[10px] font-bold text-gray-500';
+                deck.forEach(path => {
+                    const idMatch = path.match(/幻灯片(\d+)\.png/);
+                    const id = idMatch ? idMatch[1] : '?';
+                    const link = document.createElement('span');
+                    link.className = 'cursor-pointer hover:text-blue-600 hover:underline bg-gray-100 px-1 rounded';
+                    link.innerText = `#${id}`;
+                    link.onclick = (e) => {
+                        e.stopPropagation(); // Don't trigger the group split
+                        openImageViewer(path, deck);
+                    };
+                    profileContainer.appendChild(link);
+                });
+                container.appendChild(profileContainer);
+                
+                deckList.appendChild(container);
+            });
+
+            const progress = (sortedCount / 24) * 100;
+            progressBar.style.width = `${progress}%`;
+            overallProgress.innerText = `进度: ${sortedCount}/24 已确定位置`;
+        }
+
+        function checkFinished() {
+            if (allDecks.every(deckObj => deckObj.items.length <= 1)) {
+                // Stay on deck list page, no popup
+                console.log('All cards sorted.');
+            }
+        }
+
+        document.getElementById('start-btn').onclick = () => {
+            startScreen.classList.add('hidden');
+            sortingScreen.classList.remove('hidden');
+            deckSelector.classList.remove('hidden');
+
+            const shuffledDeck = shuffle([...imagePaths]);
+            allDecks = [{
+                items: shuffledDeck,
+                type: 'initial',
+                level: 0
+            }];
+            saveState();
+            updateDeckList();
+        };
+
+        function showResults(sortedItems) {
+            sortingScreen.classList.add('hidden');
+            resultScreen.classList.remove('hidden');
+        }
+
+        // Initialize from storage if exists
+        window.onload = loadState;
+    </script>
+</body>
+</html>
