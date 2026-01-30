@@ -182,7 +182,7 @@
         const overallProgress = document.getElementById('overall-progress');
         const backToDecksBtn = document.getElementById('back-to-decks');
         const resetBtn = document.getElementById('reset-btn');
-        const finalResetBtn = document.getElementById('final-reset-btn');
+        // const finalResetBtn = document.getElementById('final-reset-btn'); // Element removed
         const rankModal = document.getElementById('rank-modal');
         const viewRankBtn = document.getElementById('view-current-rank');
         const closeRankBtn = document.getElementById('close-rank-modal');
@@ -385,7 +385,7 @@
         };
 
         resetBtn.onclick = performReset;
-        finalResetBtn.onclick = performReset;
+        // finalResetBtn.onclick = performReset; // Element removed
 
         function saveState() {
             localStorage.setItem('profile_ranking_state', JSON.stringify(allDecks));
